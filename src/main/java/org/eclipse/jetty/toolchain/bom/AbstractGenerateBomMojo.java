@@ -3,21 +3,17 @@ package org.eclipse.jetty.toolchain.bom;
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.artifact.AttachedArtifact;
@@ -29,18 +25,10 @@ import org.jdom.Namespace;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
 
-/**
- * Generate a bom pom from the projects present in the reactor.
- */
-@SuppressWarnings("unused")
-@Mojo(name = "generate", threadSafe = true, requiresProject = true)
-public class GenerateBomMojo extends AbstractMojo
+public abstract class AbstractGenerateBomMojo extends AbstractMojo
 {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
-    
-    @Parameter(defaultValue = "${session}", readonly = true, required = true)
-    protected MavenSession session;
     
     /**
      * Artifacts to include/exclude from the bom.
@@ -51,7 +39,6 @@ public class GenerateBomMojo extends AbstractMojo
      * Partial patterns will result in remaining segments being declated as wildcard '{@code *}'.
      * Matching behavior is defined by {@link org.codehaus.plexus.util.SelectorUtils#match(String, String)}
      * </p>
-     * <p>
      * <pre>
      * &lt;artifactSet&gt;
      *   &lt;includes&gt;
@@ -64,25 +51,15 @@ public class GenerateBomMojo extends AbstractMojo
      * </pre>
      */
     @Parameter
-    private ArtifactSet artifactSet;
+    protected ArtifactSet artifactSet;
     
     @Parameter(defaultValue = "${project.build.directory}/bom-pom.xml")
-    private File pomLocation;
+    protected File pomLocation;
     
-    @Override
-    public void execute() throws MojoExecutionException, MojoFailureException
+    protected void generateBom(List<Artifact> allArtifacts) throws MojoExecutionException
     {
         Log log = getLog();
         log.info(String.format("Generating BOM: %s:%s:%s", project.getGroupId(), project.getArtifactId(), project.getVersion()));
-        List<MavenProject> reactorProjects = session.getSortedProjects();
-        
-        List<Artifact> allArtifacts = new ArrayList<>();
-        reactorProjects.stream().forEach((reactorProject) -> allArtifacts.addAll(reactorProject.getArtifacts()));
-        
-        if (log.isDebugEnabled())
-        {
-            log.debug(String.format("Found %d projects (%d overall artifacts)", reactorProjects.size(), allArtifacts.size()));
-        }
         
         if (artifactSet == null)
         {
@@ -160,9 +137,6 @@ public class GenerateBomMojo extends AbstractMojo
         {
             throw new MojoExecutionException("Unable to write bom pom: " + pomLocation, e);
         }
-        
-        // TODO: deploy generated pom
-        // TODO: swap generated pom for actual pom in deployment (shade plugin does this?)
     }
     
     private Artifact writePom(Model newModel, File pomLocation) throws IOException
@@ -226,8 +200,8 @@ public class GenerateBomMojo extends AbstractMojo
                     elemDependency.addContent(factory.element("groupId", pomNamespace).setText(dependency.getGroupId()));
                     elemDependency.addContent(factory.element("artifactId", pomNamespace).setText(dependency.getArtifactId()));
                     elemDependency.addContent(factory.element("version", pomNamespace).setText(dependency.getVersion()));
-                    
-                    if (StringUtils.isNotBlank(dependency.getType()))
+    
+                    if (StringUtils.isNotBlank(dependency.getType()) && !"jar".equals(dependency.getType()))
                     {
                         elemDependency.addContent(factory.element("type", pomNamespace).setText(dependency.getType()));
                     }
