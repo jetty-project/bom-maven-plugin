@@ -9,7 +9,6 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
@@ -254,6 +253,12 @@ public class GenerateBomMojo extends AbstractMojo
             w.close();
         }
         
-        return new AttachedArtifact(project.getArtifact(), "pom", "bom", new DefaultArtifactHandler());
+        // Replace existing artifact file location (HACKY?)
+        // Shame this doesn't work.
+        // project.getArtifact().setFile(pomLocation);
+        
+        AttachedArtifact attachedArtifact = new AttachedArtifact(project.getArtifact(), "pom", "bom", project.getArtifact().getArtifactHandler());
+        attachedArtifact.setFile(pomLocation);
+        return attachedArtifact;
     }
 }
