@@ -1,11 +1,19 @@
 package org.eclipse.jetty.toolchain.bom;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.DependencyManagement;
+import org.apache.maven.model.Model;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -13,6 +21,14 @@ import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.artifact.AttachedArtifact;
+import org.codehaus.plexus.util.WriterFactory;
+import org.jdom.DefaultJDOMFactory;
+import org.jdom.Document;
+import org.jdom.Element;
+import org.jdom.Namespace;
+import org.jdom.output.Format;
+import org.jdom.output.XMLOutputter;
 
 /**
  * Generate a bom pom from the projects present in the reactor.
@@ -51,6 +67,9 @@ public class GenerateBomMojo extends AbstractMojo
     @Parameter
     private ArtifactSet artifactSet;
     
+    @Parameter(defaultValue = "${project.build.directory}/bom-pom.xml")
+    private File pomLocation;
+    
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException
     {
@@ -61,7 +80,10 @@ public class GenerateBomMojo extends AbstractMojo
         List<Artifact> allArtifacts = new ArrayList<>();
         reactorProjects.stream().forEach((reactorProject) -> allArtifacts.addAll(reactorProject.getArtifacts()));
         
-        log.info(String.format("Found %d overall artifacts", allArtifacts.size()));
+        if (log.isDebugEnabled())
+        {
+            log.debug(String.format("Found %d projects (%d overall artifacts)", reactorProjects.size(), allArtifacts.size()));
+        }
         
         if (artifactSet == null)
         {
@@ -74,19 +96,164 @@ public class GenerateBomMojo extends AbstractMojo
                 .filter(selectedArtifactPredicate)
                 .collect(Collectors.toList());
         
-        log.info(String.format("Found %d reactor projects (%d artifacts selected)", reactorProjects.size(), includedArtifacts.size()));
         
-        includedArtifacts.stream()
-                .forEach((artifact) -> log.info(String.format("%s:%s:%s:%s:%s",
-                        artifact.getGroupId(),
-                        artifact.getArtifactId(),
-                        artifact.getType(),
-                        artifact.getVersion(),
-                        artifact.getClassifier())));
+        if (log.isDebugEnabled())
+        {
+            log.info(String.format("%d artifacts selected for bom", includedArtifacts.size()));
+            
+            for (Artifact artifact : includedArtifacts)
+            {
+                StringBuilder buf = new StringBuilder();
+                buf.append("Including: ").append(artifact.getGroupId());
+                buf.append(':').append(artifact.getArtifactId());
+                buf.append(':').append(artifact.getVersion());
+                buf.append(':').append(artifact.getType());
+                
+                if (StringUtils.isNotBlank(artifact.getClassifier()))
+                {
+                    buf.append(':').append(artifact.getClassifier());
+                }
+                
+                log.debug(buf.toString());
+            }
+        }
         
-        // TODO: generate new pom
+        // Generate a new pom
+        
+        Model model = new Model();
+        model.setModelVersion(project.getModelVersion());
+        model.setGroupId(project.getGroupId());
+        model.setArtifactId(project.getArtifactId());
+        model.setVersion(project.getVersion());
+        model.setPackaging("pom");
+        
+        DependencyManagement dependencyManagement = new DependencyManagement();
+        
+        for (Artifact artifact : includedArtifacts)
+        {
+            Dependency dependency = new Dependency();
+            dependency.setGroupId(artifact.getGroupId());
+            dependency.setArtifactId(artifact.getArtifactId());
+            dependency.setVersion(artifact.getVersion());
+            
+            if (StringUtils.isNotBlank(artifact.getType()))
+            {
+                dependency.setType(artifact.getType());
+            }
+            
+            if (StringUtils.isNotBlank(artifact.getClassifier()))
+            {
+                dependency.setClassifier(artifact.getClassifier());
+            }
+            dependencyManagement.addDependency(dependency);
+        }
+        
+        model.setDependencyManagement(dependencyManagement);
+        
+        // Write pom to disk
+        
+        try
+        {
+            Artifact bomPom = writePom(model, pomLocation);
+            project.addAttachedArtifact(bomPom);
+        }
+        catch (IOException e)
+        {
+            throw new MojoExecutionException("Unable to write bom pom: " + pomLocation, e);
+        }
         
         // TODO: deploy generated pom
         // TODO: swap generated pom for actual pom in deployment (shade plugin does this?)
+    }
+    
+    private Artifact writePom(Model newModel, File pomLocation) throws IOException
+    {
+        File parentDir = pomLocation.getParentFile();
+        if (!parentDir.exists())
+        {
+            if (!parentDir.mkdirs())
+            {
+                throw new IOException("Unable to create directory: " + parentDir.getAbsolutePath());
+            }
+        }
+        
+        Writer w = WriterFactory.newXmlWriter(pomLocation);
+        try
+        {
+            Element root = new Element("project");
+            
+            String modelVersion = newModel.getModelVersion();
+            
+            Namespace pomNamespace = Namespace.getNamespace("", "http://maven.apache.org/POM/" + modelVersion);
+            
+            root.setNamespace(pomNamespace);
+            
+            Namespace xsiNamespace = Namespace.getNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+            
+            root.addNamespaceDeclaration(xsiNamespace);
+            
+            if (root.getAttribute("schemaLocation", xsiNamespace) == null)
+            {
+                root.setAttribute("schemaLocation",
+                        "http://maven.apache.org/POM/" + modelVersion + " http://maven.apache.org/maven-v"
+                                + modelVersion.replace('.', '_') + ".xsd", xsiNamespace);
+            }
+            
+            DefaultJDOMFactory factory = new DefaultJDOMFactory();
+            
+            Document doc = new Document(root);
+            
+            // Build jdom
+            root.addContent(factory.element("modelVersion", pomNamespace).setText(newModel.getModelVersion()));
+            root.addContent(factory.element("groupId", pomNamespace).setText(newModel.getGroupId()));
+            root.addContent(factory.element("artifactId", pomNamespace).setText(newModel.getArtifactId()));
+            root.addContent(factory.element("version", pomNamespace).setText(newModel.getVersion()));
+            root.addContent(factory.element("packaging", pomNamespace).setText("pom"));
+            
+            DependencyManagement dependencyManagement = newModel.getDependencyManagement();
+            
+            if (dependencyManagement != null)
+            {
+                Element elemDependencyManagement = factory.element("dependencyManagement", pomNamespace);
+                root.addContent(elemDependencyManagement);
+                
+                Element elemDependencies = factory.element("dependencies", pomNamespace);
+                elemDependencyManagement.addContent(elemDependencies);
+                
+                for (Dependency dependency : dependencyManagement.getDependencies())
+                {
+                    Element elemDependency = factory.element("dependency", pomNamespace);
+                    
+                    elemDependency.addContent(factory.element("groupId", pomNamespace).setText(dependency.getGroupId()));
+                    elemDependency.addContent(factory.element("artifactId", pomNamespace).setText(dependency.getArtifactId()));
+                    elemDependency.addContent(factory.element("version", pomNamespace).setText(dependency.getVersion()));
+                    
+                    if (StringUtils.isNotBlank(dependency.getType()))
+                    {
+                        elemDependency.addContent(factory.element("type", pomNamespace).setText(dependency.getType()));
+                    }
+                    
+                    if (StringUtils.isNotBlank(dependency.getClassifier()))
+                    {
+                        elemDependency.addContent(factory.element("classifier", pomNamespace).setText(dependency.getClassifier()));
+                    }
+                    
+                    elemDependencies.addContent(elemDependency);
+                }
+            }
+            
+            // Write file
+            String encoding = newModel.getModelEncoding() != null ? newModel.getModelEncoding() : "UTF-8";
+            Format format = Format.getPrettyFormat().setEncoding(encoding);
+            XMLOutputter outputter = new XMLOutputter();
+            outputter.setFormat(format);
+            outputter.output(doc, w);
+        }
+        finally
+        {
+            w.close();
+        }
+        
+        return new AttachedArtifact(project.getArtifact(), "pom", "bom", new DefaultArtifactHandler());
     }
 }
