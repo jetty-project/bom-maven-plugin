@@ -29,7 +29,10 @@ public abstract class AbstractGenerateBomMojo extends AbstractMojo
 {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
-    
+
+    @Parameter(defaultValue = "false", readonly = false, required = true)
+    protected boolean includeCurrentProject;
+
     /**
      * Artifacts to include/exclude from the bom.
      * <p>
@@ -231,7 +234,9 @@ public abstract class AbstractGenerateBomMojo extends AbstractMojo
         // Shame this doesn't work.
         // project.getArtifact().setFile(pomLocation);
         
-        AttachedArtifact attachedArtifact = new AttachedArtifact(project.getArtifact(), "pom", "bom", project.getArtifact().getArtifactHandler());
+        AttachedArtifact attachedArtifact =
+            new AttachedArtifact(project.getArtifact(), "pom", "bom", //
+                                 project.getArtifact().getArtifactHandler());
         attachedArtifact.setFile(pomLocation);
         return attachedArtifact;
     }
