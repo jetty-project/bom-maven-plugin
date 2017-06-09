@@ -4,11 +4,10 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
-    <artifactId>bom-from-reactor</artifactId>
+    <artifactId>bom-from-dependencies</artifactId>
     <version>1.0-SNAPSHOT</version>
   </parent>
-  <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
-  <artifactId>the-bom</artifactId>
+  <artifactId>the-bom-dependencies</artifactId>
   <name>${project.artifactId}</name>
   <packaging>bom</packaging>
 
@@ -19,8 +18,18 @@
         <artifactId>bom-maven-plugin</artifactId>
         <version>@project.version@</version>
         <extensions>true</extensions>
+        <configuration>
+          <generateFromReactorList>false</generateFromReactorList>
+        </configuration>
       </plugin>
     </plugins>
   </build>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
+      <artifactId>basic-simple-jar-dependencies</artifactId>
+    </dependency>
+  </dependencies>
 
 </project>

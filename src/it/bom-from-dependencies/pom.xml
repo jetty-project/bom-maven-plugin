@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
-  <artifactId>bom-from-reactor</artifactId>
+  <artifactId>bom-from-dependencies</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
@@ -25,12 +25,12 @@
       </dependency>
       <dependency>
         <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
-        <artifactId>basic-simple-jar</artifactId>
+        <artifactId>basic-simple-jar-dependencies</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
-        <artifactId>an-other-basic-simple-jar</artifactId>
+        <artifactId>an-other-basic-simple-jar-dependencies</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

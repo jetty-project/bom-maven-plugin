@@ -1,11 +1,5 @@
 package org.eclipse.jetty.toolchain.bom;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.model.Dependency;
@@ -13,8 +7,12 @@ import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.artifact.AttachedArtifact;
 import org.codehaus.plexus.util.WriterFactory;
@@ -25,13 +23,33 @@ import org.jdom.Namespace;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
 
-public abstract class AbstractGenerateBomMojo extends AbstractMojo
+import java.io.File;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Mojo(name = "generate-bom", defaultPhase = LifecyclePhase.GENERATE_RESOURCES, threadSafe = true,
+    requiresProject = true, requiresDependencyResolution = ResolutionScope.COMPILE)
+public class GenerateBomMojo
+    extends AbstractMojo
 {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
 
-    @Parameter(defaultValue = "false", readonly = false, required = true)
+    @Parameter(defaultValue = "false", required = true)
     protected boolean includeCurrentProject;
+
+    /**
+     * Contains the full list of projects in the reactor.
+     */
+    @Parameter(defaultValue = "${reactorProjects}", readonly = true, required = true)
+    private List<MavenProject> reactorProjects;
+
+    @Parameter(defaultValue = "true", required = true)
+    protected boolean generateFromReactorList = true;
+
 
     /**
      * Artifacts to include/exclude from the bom.
@@ -58,7 +76,62 @@ public abstract class AbstractGenerateBomMojo extends AbstractMojo
     
     @Parameter(defaultValue = "${project.build.directory}/bom-pom.xml")
     protected File pomLocation;
-    
+
+    @Override
+    public void execute()
+        throws MojoExecutionException, MojoFailureException
+    {
+        if ( generateFromReactorList )
+        {
+            executeFromReactor();
+        }
+        else
+        {
+            executeFromDependencies();
+        }
+    }
+
+    public void executeFromDependencies() throws MojoExecutionException, MojoFailureException
+    {
+        List<Artifact> allArtifacts = new ArrayList<>();
+        allArtifacts.addAll(project.getDependencyArtifacts());
+
+        Log log = getLog();
+        if (log.isDebugEnabled())
+        {
+            log.debug(String.format("Found %d dependency artifacts", allArtifacts.size()));
+        }
+
+        generateBom(allArtifacts);
+    }
+
+    public void executeFromReactor() throws MojoExecutionException, MojoFailureException
+    {
+        List<Artifact> allArtifacts = new ArrayList<>();
+        reactorProjects.stream().forEach((reactorProject) ->
+        {
+            if (reactorProject.getGroupId().equals( project.getGroupId()) //
+                && reactorProject.getArtifactId().equals( project.getArtifactId() ) ) {
+                if (includeCurrentProject) {
+                    allArtifacts.add( reactorProject.getArtifact() );
+                    allArtifacts.addAll( reactorProject.getArtifacts() );
+                }
+            } else
+            {
+             allArtifacts.add( reactorProject.getArtifact() );
+             allArtifacts.addAll( reactorProject.getArtifacts() );
+         }
+        });
+
+        Log log = getLog();
+        if (log.isDebugEnabled())
+        {
+            log.debug(String.format("Found %d projects (%d overall artifacts)", reactorProjects.size(), allArtifacts.size()));
+        }
+
+        generateBom(allArtifacts);
+    }
+
     protected void generateBom(List<Artifact> allArtifacts) throws MojoExecutionException
     {
         Log log = getLog();
