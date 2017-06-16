@@ -10,7 +10,7 @@
   <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
   <artifactId>the-bom</artifactId>
   <name>${project.artifactId}</name>
-  <packaging>pom</packaging>
+  <packaging>bom</packaging>
 
   <build>
     <plugins>
