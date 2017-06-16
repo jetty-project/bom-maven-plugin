@@ -10,7 +10,7 @@
   <groupId>org.eclipse.jetty.toolchain.bom.its</groupId>
   <artifactId>the-bom</artifactId>
   <name>${project.artifactId}</name>
-  <packaging>bom</packaging>
+  <packaging>pom</packaging>
 
   <build>
     <plugins>
@@ -19,6 +19,16 @@
         <artifactId>bom-maven-plugin</artifactId>
         <version>@project.version@</version>
         <extensions>true</extensions>
+        <!--
+        <executions>
+          <execution>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>generate-bom</goal>
+            </goals>
+          </execution>
+        </executions>
+        -->
       </plugin>
     </plugins>
   </build>

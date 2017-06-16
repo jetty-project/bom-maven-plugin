@@ -46,6 +46,22 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.eclipse.jetty.toolchain</groupId>
+        <artifactId>bom-maven-plugin</artifactId>
+        <version>@project.version@</version>
+        <executions>
+          <execution>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>generate-bom</goal>
+            </goals>
+          </execution>
+        </executions>
+        <!--
+        <extensions>true</extensions>
+        -->
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.6.1</version>

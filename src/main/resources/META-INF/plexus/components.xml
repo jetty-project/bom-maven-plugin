@@ -10,9 +10,8 @@
             <id>default</id>
             <phases>
               <generate-resources>org.eclipse.jetty.toolchain:bom-maven-plugin:generate-bom</generate-resources>
-              <package>org.eclipse.jetty.toolchain:bom-maven-plugin:package-bom</package>
-              <install>org.apache.maven.plugins:maven-install-plugin:install</install>
-              <deploy>org.apache.maven.plugins:maven-deploy-plugin:deploy</deploy>
+              <install>org.apache.maven.plugins:maven-install-plugin:2.5.2:install</install>
+              <deploy>org.apache.maven.plugins:maven-deploy-plugin:2.8.2:deploy</deploy>
             </phases>
           </lifecycle>
         </lifecycles>
